@@ -5,6 +5,21 @@
   * error handling for content filtered examples
 
 
+Example usage:
+
+```python
+import openai
+openai.api_type = "azure"
+# openai.api_key = "..."
+openai.api_base = "https://example-endpoint.openai.azure.com" # set to your endpoint
+openai.api_version = "2023-07-01-preview" # use at least this version for function_call
+os.environ["ALPACA_EVAL_USE_AZURE"] = "true"
+os.environ["OPENAI_MAX_CONCURRENCY"] = "1" # set desired concurrent api calls
+
+import alpaca_eval
+```
+
+
 # <a href="https://tatsu-lab.github.io/alpaca_eval/" target="_blank"><img src="https://raw.githubusercontent.com/tatsu-lab/alpaca_eval/main/docs/AlpacaFarm_small.png" width="35"></a> [AlpacaEval](https://tatsu-lab.github.io/alpaca_eval/) : An Automatic Evaluator for Instruction-following Language Models
 
 [![Code License](https://img.shields.io/badge/Code%20License-Apache_2.0-green.svg)](https://github.com/tatsu-lab/alpaca_farm/blob/main/LICENSE)
