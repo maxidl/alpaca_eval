@@ -7,6 +7,7 @@ import multiprocessing
 import random
 import time
 from typing import Optional, Sequence, Union
+import os
 
 import numpy as np
 import openai
@@ -133,6 +134,18 @@ def openai_completions(
     inputs = zip(prompt_batches, max_tokens)
 
     kwargs = dict(n=1, model=model_name, is_chat=is_chat, **decoding_kwargs)
+    
+    # openai on azure fix: map models to out deployments
+    if os.environ.get("ALPACA_EVAL_USE_AZURE"):
+        print('============================ using azure backend =========================')
+        assert batch_size == 1, f"azure backend only supports batch_size=1, but batch_size is {batch_size}"
+        model2deployment_id = {
+            "gpt-3.5-turbo-16k-0613": "gpt-35-turbo-16k",
+            "gpt-4": "gpt-4"
+        }
+        assert kwargs["model"] in model2deployment_id.keys(), f"{kwargs['model']} not deployed on azure."
+        kwargs["deployment_id"] = model2deployment_id[kwargs["model"]]
+
     kwargs_to_log = {k: v for k, v in kwargs.items() if "api_key" not in k}
     logging.info(f"Kwargs to completion: {kwargs_to_log}. num_procs={num_procs}")
 
@@ -156,12 +169,27 @@ def openai_completions(
 
     # flatten the list and select only the text
     completions_all = [completion for completion_batch in completions for completion in completion_batch]
+
+    # take care of content-filtered completions
+    completions_all_new = []
+    num_content_filtered = 0
+    for completion in completions_all:
+        if completion == 'content_filtered':
+            # assert completions_all[0] != "content_filtered"
+            completions_all_new.append(completions_all[0])
+            num_content_filtered += 1
+        else:
+            completions_all_new.append(completion)
+    completions_all = completions_all_new
+    print(f"content filtered completions: {num_content_filtered}. Replacing with first completion")
+
     completions_text = [completion.text for completion in completions_all]
 
     price = [
         completion["total_tokens"] * _get_price_per_token(model_name)
-        for completion_batch in completions
-        for completion in completion_batch
+        # for completion_batch in completions
+        # for completion in completion_batch
+        for completion in completions_all
     ]
     avg_time = [t.duration / n_examples] * len(completions_text)
 
@@ -176,7 +204,7 @@ def openai_completions(
 def _openai_completion_helper(
     args: tuple[Sequence[str], int],
     is_chat: bool,
-    sleep_time: int = 2,
+    sleep_time: int = 5,
     openai_organization_ids: Optional[Sequence[str]] = constants.OPENAI_ORGANIZATION_IDS,
     openai_api_keys: Optional[Sequence[str]] = constants.OPENAI_API_KEYS,
     openai_api_base: Optional[str] = None,
@@ -205,12 +233,20 @@ def _openai_completion_helper(
     while True:
         try:
             if is_chat:
+                # print(prompt_batch[0])
                 completion_batch = openai.ChatCompletion.create(messages=prompt_batch[0], **curr_kwargs)
 
                 choices = completion_batch.choices
+                # breakpoint()
                 for choice in choices:
+                    # print(choices)
+                    # print(f"content: {choice.message.content}")
+                    # time.sleep(5)
                     assert choice.message.role == "assistant"
-                    if choice.message.content == "":
+
+                    if not hasattr(choice.message, "content"):
+                        choice["text"] = " "
+                    elif choice.message.content == "":
                         choice["text"] = " "  # annoying doesn't allow empty string
                     else:
                         choice["text"] = choice.message.content
@@ -234,6 +270,14 @@ def _openai_completion_helper(
                 if kwargs["max_tokens"] == 0:
                     logging.exception("Prompt is already longer than max context length. Error:")
                     raise e
+            
+            elif "content management policy" in str(e):
+                print(f"content policy error for prompt:\n{prompt_batch[0]}")
+                choices = [
+                    'content_filtered'    
+                ]
+                break
+
             else:
                 if "rate limit" in str(e).lower():
                     logging.warning(f"Hit request rate limit; retrying...")

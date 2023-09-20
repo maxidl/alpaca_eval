@@ -5,6 +5,15 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![discord](https://img.shields.io/badge/discord-server-blue?logo=discord&logoColor=white)](https://discord.gg/GJMxJSVZZM)
 
+
+# Modifications in this Repo
+
+* added openai on azure as backend
+  * using azure deployments of models
+  * error handling for content filtered examples
+
+# Original README
+
 Evaluation of instruction-following models (e.g., ChatGPT) typically requires human interactions. This is
 time-consuming, expensive, and hard to replicate. AlpacaEval in an LLM-based automatic evaluation that is fast, cheap,
 replicable, and validated against 20K human annotations.
